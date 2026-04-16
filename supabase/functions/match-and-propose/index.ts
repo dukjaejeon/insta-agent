@@ -1,4 +1,4 @@
-import { createAdminClient, createUserClient } from "../_shared/supabase.ts";
+import { createAdminClient } from "../_shared/supabase.ts";
 import { callClaude, estimateCost } from "../_shared/anthropic.ts";
 
 const CORS_HEADERS = {
@@ -17,23 +17,6 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
-    }
-
-    const userClient = createUserClient(authHeader);
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
-    }
-
     const adminClient = createAdminClient();
     const body = await req.json() as { listing_id: string; playbook_id?: string | null };
     const { listing_id, playbook_id } = body;

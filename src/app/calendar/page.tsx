@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Navigation } from "@/components/layout/Navigation";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, getCurrentUserId } from "@/lib/supabase/client";
 
 interface CalendarPost {
   time: string;
@@ -94,7 +94,7 @@ export default function CalendarPage() {
     setGenerating(true);
     const supabase = createClient();
     const { data, error } = await supabase.functions.invoke("generate-calendar", {
-      body: { week_start: weekStart },
+      body: { week_start: weekStart, user_id: getCurrentUserId() },
     });
 
     if (!error && data?.plan) {

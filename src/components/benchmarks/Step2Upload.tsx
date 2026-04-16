@@ -237,10 +237,10 @@ export function Step2Upload({
         <button
           type="button"
           onClick={onNext}
-          disabled={uploadedCount === 0 || uploading}
+          disabled={uploading}
           className="px-6 py-2.5 rounded-2xl bg-sage text-white font-medium hover:bg-sage-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {uploading ? "업로드 중..." : "다음: OCR 분석"}
+          {uploading ? "업로드 중..." : "다음: 게시물 입력"}
         </button>
       </div>
     </GlassCard>

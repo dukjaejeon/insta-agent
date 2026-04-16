@@ -1,4 +1,4 @@
-import { createAdminClient, createUserClient } from "../_shared/supabase.ts";
+import { createAdminClient } from "../_shared/supabase.ts";
 import { callClaude, estimateCost } from "../_shared/anthropic.ts";
 
 const CORS_HEADERS = {
@@ -16,26 +16,10 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
-    }
-
-    const userClient = createUserClient(authHeader);
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      });
-    }
-
     const adminClient = createAdminClient();
-    const body = await req.json() as { week_start: string };
-    const { week_start } = body;
+    const body = await req.json() as { week_start: string; user_id: string };
+    const { week_start, user_id } = body;
+    const user = { id: user_id };
 
     // 현재 사용자의 활성 매물 로드
     const { data: listings } = await adminClient

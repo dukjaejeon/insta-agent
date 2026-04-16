@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createAdminClient, createUserClient } from "../_shared/supabase.ts";
+import { createAdminClient } from "../_shared/supabase.ts";
 import { callClaude, estimateCost } from "../_shared/anthropic.ts";
 import {
   CLASSIFY_POSTS,
@@ -21,30 +21,20 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const authHeader = req.headers.get("Authorization");
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const userClient = createUserClient(authHeader);
   const adminClient = createAdminClient();
-
-  const { data: { user }, error: authError } = await userClient.auth.getUser();
-  if (authError || !user) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
 
   const { account_id, analysis_type = "initial" } = await req.json() as {
     account_id: string;
     analysis_type: string;
     new_post_ids?: string[];
   };
+
+  // 계정 정보 (user_id 포함)
+  const { data: accountRecord } = await adminClient
+    .from("benchmark_accounts")
+    .select("user_id, follower_count")
+    .eq("id", account_id)
+    .single();
 
   // analyses 레코드 생성
   const { data: analysis, error: analysisErr } = await adminClient
@@ -361,10 +351,8 @@ serve(async (req) => {
           .filter((d) => (viralPosts || []).some((vp) => vp.id === d.post_id))
           .map((d) => d.post_id as string);
 
-        const { data: { user: authUser } } = await userClient.auth.getUser();
-
         const { data: newPb } = await adminClient.from("playbooks").insert({
-          user_id: authUser!.id,
+          user_id: accountRecord.user_id,
           source_account_id: account_id,
           code: `PB-${Date.now().toString(36).toUpperCase()}`,
           name: pb.name,
