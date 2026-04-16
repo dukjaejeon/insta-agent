@@ -13,6 +13,7 @@ interface Step5Props {
   analysisStatus: "idle" | "running" | "completed" | "failed";
   errorMessage: string | null;
   onViewReport: () => void;
+  onBack?: () => void;
 }
 
 const defaultStages: AnalysisStage[] = [
@@ -32,6 +33,7 @@ export function Step5Analysis({
   analysisStatus,
   errorMessage,
   onViewReport,
+  onBack,
 }: Step5Props) {
   const completedCount = stages.filter((s) => s.status === "completed").length;
   const progress = (completedCount / stages.length) * 100;
@@ -109,6 +111,19 @@ export function Step5Analysis({
       {errorMessage && (
         <div className="mt-4 p-4 rounded-xl bg-red-50 border border-red-200">
           <p className="text-sm text-red-600">{errorMessage}</p>
+        </div>
+      )}
+
+      {/* 실패 시 뒤로가기 */}
+      {analysisStatus === "failed" && onBack && (
+        <div className="mt-6 flex justify-center gap-3">
+          <button
+            type="button"
+            onClick={onBack}
+            className="px-6 py-2.5 rounded-2xl border border-border-soft text-charcoal-light font-medium hover:bg-white/80 transition-colors"
+          >
+            ← 설정으로 돌아가기
+          </button>
         </div>
       )}
 

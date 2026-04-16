@@ -26,18 +26,18 @@ export default function BenchmarksPage() {
     setDeletingId(null);
   };
 
-  useEffect(() => {
-    const load = async () => {
-      const supabase = createClient();
-      const { data } = await supabase
-        .from("benchmark_accounts")
-        .select("*")
-        .order("created_at", { ascending: false });
-      setAccounts(data ?? []);
-      setLoading(false);
-    };
-    load();
-  }, []);
+  const load = async () => {
+    setLoading(true);
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("benchmark_accounts")
+      .select("*")
+      .order("created_at", { ascending: false });
+    setAccounts(data ?? []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, []);
 
   return (
     <AuthGuard>
@@ -46,12 +46,25 @@ export default function BenchmarksPage() {
         <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-charcoal">벤치마크 계정</h1>
-            <Link
-              href="/benchmarks/new"
-              className="px-5 py-2.5 rounded-2xl bg-sage text-white font-medium hover:bg-sage-dark transition-colors"
-            >
-              새 벤치마크 추가
-            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={load}
+                disabled={loading}
+                className="w-9 h-9 rounded-xl border border-border-soft flex items-center justify-center text-charcoal-light hover:bg-white/80 transition-colors disabled:opacity-40"
+                title="새로고침"
+              >
+                <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+              </button>
+              <Link
+                href="/benchmarks/new"
+                className="px-5 py-2.5 rounded-2xl bg-sage text-white font-medium hover:bg-sage-dark transition-colors"
+              >
+                새 벤치마크 추가
+              </Link>
+            </div>
           </div>
 
           {loading ? (

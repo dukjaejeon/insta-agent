@@ -282,6 +282,7 @@ export default function NewBenchmarkPage() {
               data={accountData}
               onChange={setAccountData}
               onNext={handleStep1Next}
+              onBack={() => router.push("/benchmarks")}
             />
           )}
 
@@ -327,9 +328,12 @@ export default function NewBenchmarkPage() {
               stages={stages}
               analysisStatus={analysisStatus}
               errorMessage={errorMessage}
-              onViewReport={() =>
-                router.push(`/benchmarks/${accountId}`)
-              }
+              onViewReport={() => router.push(`/benchmarks/${accountId}`)}
+              onBack={() => {
+                setAnalysisStatusSafe("idle");
+                setStages(defaultStages);
+                setCurrentStep(4);
+              }}
             />
           )}
         </main>

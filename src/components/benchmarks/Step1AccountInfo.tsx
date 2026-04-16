@@ -19,6 +19,7 @@ interface Step1Props {
   data: AccountData;
   onChange: (data: AccountData) => void;
   onNext: () => void;
+  onBack?: () => void;
 }
 
 const CATEGORIES = [
@@ -48,7 +49,7 @@ const CATEGORIES = [
   },
 ];
 
-export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
+export function Step1AccountInfo({ data, onChange, onNext, onBack }: Step1Props) {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [ocrStatus, setOcrStatus] = useState<"idle" | "success" | "fail">("idle");
@@ -333,7 +334,16 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
         </div>
       </div>
 
-      <div className="mt-8 flex justify-end">
+      <div className="mt-8 flex justify-between">
+        {onBack ? (
+          <button
+            type="button"
+            onClick={onBack}
+            className="px-6 py-2.5 rounded-2xl border border-border-soft text-charcoal-light font-medium hover:bg-white/80 transition-colors"
+          >
+            ← 목록으로
+          </button>
+        ) : <div />}
         <button
           type="button"
           onClick={handleNext}
