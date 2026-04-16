@@ -112,9 +112,43 @@ export function Step2Upload({
       <h2 className="text-lg font-semibold text-charcoal mb-2">
         Step 2. 게시물 스크린샷 업로드
       </h2>
-      <p className="text-sm text-charcoal-light mb-6">
-        게시물 상세 스크린샷을 드래그하여 올려주세요 (최대 50장)
+      <p className="text-sm text-charcoal-light mb-4">
+        경쟁 계정의 게시물을 캡쳐해서 올려주세요. AI가 좋아요·댓글 수를 읽어 자동 입력합니다.
       </p>
+
+      {/* 촬영 가이드 */}
+      <div className="rounded-2xl bg-blue-50/60 border border-blue-200/40 p-4 mb-5">
+        <p className="text-xs font-semibold text-blue-700 mb-2">📱 잘 캡쳐하는 방법</p>
+        <div className="space-y-1.5">
+          <div className="flex items-start gap-2">
+            <span className="text-blue-500 text-xs mt-0.5 shrink-0">①</span>
+            <p className="text-xs text-blue-700/80">
+              <strong>게시물 상세 화면</strong>에서 캡쳐 — 좋아요 수·댓글 수·게시 시간이 보여야 합니다
+            </p>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-blue-500 text-xs mt-0.5 shrink-0">②</span>
+            <p className="text-xs text-blue-700/80">
+              <strong>최근 3개월</strong> 게시물 위주로 수집 (10~30개 권장)
+            </p>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-blue-500 text-xs mt-0.5 shrink-0">③</span>
+            <p className="text-xs text-blue-700/80">
+              좋아요 수가 특히 많은 <strong>잘된 게시물</strong>을 우선 포함하세요
+            </p>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-blue-500 text-xs mt-0.5 shrink-0">④</span>
+            <p className="text-xs text-blue-700/80">
+              캡션(본문)이 길면 <strong>더 보기</strong>를 눌러 전체 내용이 보이게 캡쳐하세요
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-blue-600/60 mt-2 border-t border-blue-200/40 pt-2">
+          많을수록 분석 품질이 좋아집니다. 최소 5개 이상 권장.
+        </p>
+      </div>
 
       {/* 드래그 영역 */}
       <div

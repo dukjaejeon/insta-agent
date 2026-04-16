@@ -22,16 +22,52 @@ interface Step1Props {
 }
 
 const CATEGORIES = [
-  { value: "프리미엄", label: "프리미엄", desc: "강남·고가 아파트 (10억+)" },
-  { value: "일반", label: "일반", desc: "중간 가격대 아파트 (3~10억)" },
-  { value: "실속형", label: "실속형", desc: "빌라·다세대·소형 (3억 이하)" },
-  { value: "전문특화", label: "전문특화", desc: "특정 지역·타입 전문 계정" },
+  {
+    value: "프리미엄",
+    label: "프리미엄",
+    desc: "강남·고가 아파트 (10억+)",
+    icon: "💎",
+  },
+  {
+    value: "일반",
+    label: "일반",
+    desc: "중간 가격대 아파트 (3~10억)",
+    icon: "🏠",
+  },
+  {
+    value: "실속형",
+    label: "실속형",
+    desc: "빌라·다세대·소형 (3억 이하)",
+    icon: "🏘",
+  },
+  {
+    value: "전문특화",
+    label: "전문특화",
+    desc: "특정 지역·타입만 다루는 계정",
+    icon: "🎯",
+  },
 ];
 
 export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [ocrStatus, setOcrStatus] = useState<"idle" | "success" | "fail">("idle");
+  const [handleError, setHandleError] = useState(false);
+
+  const update = (field: keyof AccountData, value: string | number | boolean | null) => {
+    onChange({ ...data, [field]: value });
+  };
+
+  // 계정유형 체크박스 토글 (중복선택 가능, 콤마 구분 저장)
+  const toggleCategory = (value: string) => {
+    const current = data.category ? data.category.split(",").filter(Boolean) : [];
+    const updated = current.includes(value)
+      ? current.filter((c) => c !== value)
+      : [...current, value];
+    onChange({ ...data, category: updated.join(",") });
+  };
+
+  const selectedCategories = data.category ? data.category.split(",").filter(Boolean) : [];
 
   const handleProfileScreenshot = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -39,17 +75,18 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // 미리보기 즉시 표시
     setPreviewUrl(URL.createObjectURL(file));
     setUploading(true);
+    setOcrStatus("idle");
 
     try {
       const supabase = createClient();
       const userId = getCurrentUserId();
       const path = `${userId}/profile-temp/${Date.now()}-${file.name}`;
-      await supabase.storage.from("screenshots").upload(path, file);
+      const { error: uploadError } = await supabase.storage.from("screenshots").upload(path, file);
 
-      // API 키 있으면 OCR 자동 추출
+      if (uploadError) throw uploadError;
+
       const { data: fnData, error } = await supabase.functions.invoke(
         "ocr-extract-posts",
         {
@@ -73,20 +110,16 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
         });
         setOcrStatus("success");
       } else {
+        console.error("OCR error:", error, fnData);
         setOcrStatus("fail");
       }
-    } catch {
+    } catch (err) {
+      console.error("프로필 OCR 실패:", err);
       setOcrStatus("fail");
     } finally {
       setUploading(false);
     }
   };
-
-  const update = (field: keyof AccountData, value: string | number | boolean | null) => {
-    onChange({ ...data, [field]: value });
-  };
-
-  const [handleError, setHandleError] = useState(false);
 
   const handleNext = () => {
     if (!data.handle.trim()) {
@@ -105,17 +138,14 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
 
       {/* 프로필 스크린샷 업로드 */}
       <div className="mb-6">
-        <label className="block text-sm font-medium text-charcoal mb-2">
+        <label className="block text-sm font-medium text-charcoal mb-1">
           프로필 스크린샷
-          <span className="text-xs text-charcoal-light/60 font-normal ml-2">
-            (사진 올리면 자동 입력)
-          </span>
         </label>
+        <p className="text-xs text-charcoal-light/60 mb-2">
+          인스타그램 프로필 화면을 캡쳐해서 올리면 아이디·팔로워 수 등이 자동 입력됩니다
+        </p>
 
-        <label
-          htmlFor="profile-screenshot"
-          className="cursor-pointer block"
-        >
+        <label htmlFor="profile-screenshot" className="cursor-pointer block">
           {previewUrl ? (
             <div className="relative rounded-2xl overflow-hidden border border-border-soft">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -125,9 +155,9 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
                 className="w-full max-h-48 object-cover"
               />
               {uploading && (
-                <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span className="text-white text-sm">분석 중...</span>
+                <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center gap-2">
+                  <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span className="text-white text-sm font-medium">AI 분석 중...</span>
                 </div>
               )}
               {!uploading && (
@@ -143,13 +173,14 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-charcoal">사진 업로드</p>
+              <p className="text-sm font-medium text-charcoal">프로필 사진 업로드</p>
               <p className="text-xs text-charcoal-light/60 mt-1">
-                인스타그램 프로필 스크린샷
+                아이디·팔로워·소개글 자동 입력
               </p>
             </div>
           )}
         </label>
+
         {ocrStatus === "fail" && (
           <p className="text-xs text-amber-600 mt-2">
             ⚠️ 자동 입력 실패 — 아래에 직접 입력해주세요
@@ -157,7 +188,7 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
         )}
         {ocrStatus === "success" && (
           <p className="text-xs text-sage-dark mt-2">
-            ✓ 자동 입력 완료 — 내용을 확인하고 수정하세요
+            ✓ 자동 입력 완료 — 내용을 확인하고 필요시 수정하세요
           </p>
         )}
         <input
@@ -170,6 +201,7 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
+        {/* 아이디 */}
         <div className="col-span-2">
           <label className="block text-sm font-medium text-charcoal mb-1.5">
             인스타 아이디 *
@@ -186,6 +218,7 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
           )}
         </div>
 
+        {/* 계정 이름 */}
         <div className="col-span-2">
           <label className="block text-sm font-medium text-charcoal mb-1.5">
             계정 이름
@@ -199,19 +232,22 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
           />
         </div>
 
+        {/* 계정 소개글 */}
         <div className="col-span-2">
-          <label className="block text-sm font-medium text-charcoal mb-1.5">
+          <label className="block text-sm font-medium text-charcoal mb-1">
             계정 소개글
+            <span className="text-xs text-charcoal-light/60 font-normal ml-2">(선택 — AI 분류 정확도에 도움)</span>
           </label>
           <textarea
             value={data.bio}
             onChange={(e) => update("bio", e.target.value)}
             placeholder="인스타 프로필 소개글"
-            rows={3}
+            rows={2}
             className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors resize-none"
           />
         </div>
 
+        {/* 팔로워 / 게시물 수 */}
         <div>
           <label className="block text-sm font-medium text-charcoal mb-1.5">
             팔로워 수
@@ -219,14 +255,11 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
           <input
             type="number"
             value={data.follower_count ?? ""}
-            onChange={(e) =>
-              update("follower_count", e.target.value ? Number(e.target.value) : null)
-            }
+            onChange={(e) => update("follower_count", e.target.value ? Number(e.target.value) : null)}
             placeholder="3200"
             className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors"
           />
         </div>
-
         <div>
           <label className="block text-sm font-medium text-charcoal mb-1.5">
             게시물 수
@@ -234,46 +267,68 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
           <input
             type="number"
             value={data.post_count ?? ""}
-            onChange={(e) =>
-              update("post_count", e.target.value ? Number(e.target.value) : null)
-            }
+            onChange={(e) => update("post_count", e.target.value ? Number(e.target.value) : null)}
             placeholder="120"
             className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors"
           />
         </div>
 
+        {/* 계정 유형 체크박스 */}
         <div className="col-span-2">
-          <label className="block text-sm font-medium text-charcoal mb-1.5">
+          <label className="block text-sm font-medium text-charcoal mb-1">
             계정 유형
-            <span className="text-xs text-charcoal-light/60 font-normal ml-2">
-              (바이럴 기준 설정에 사용)
-            </span>
+            <span className="text-xs text-charcoal-light/60 font-normal ml-2">(중복선택 가능 — 바이럴 기준 보정에 사용)</span>
           </label>
-          <select
-            value={data.category}
-            onChange={(e) => update("category", e.target.value)}
-            className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors"
-          >
-            <option value="">선택하세요</option>
-            {CATEGORIES.map((cat) => (
-              <option key={cat.value} value={cat.value}>
-                {cat.label} — {cat.desc}
-              </option>
-            ))}
-          </select>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            {CATEGORIES.map((cat) => {
+              const checked = selectedCategories.includes(cat.value);
+              return (
+                <label
+                  key={cat.value}
+                  className={`flex items-start gap-3 p-3 rounded-2xl border cursor-pointer transition-colors ${
+                    checked
+                      ? "border-sage bg-sage/5"
+                      : "border-border-soft bg-white/40 hover:bg-white/60"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleCategory(cat.value)}
+                    className="mt-0.5 w-4 h-4 rounded text-sage focus:ring-sage/30"
+                  />
+                  <div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-sm">{cat.icon}</span>
+                      <span className={`text-sm font-medium ${checked ? "text-sage-dark" : "text-charcoal"}`}>
+                        {cat.label}
+                      </span>
+                    </div>
+                    <p className="text-xs text-charcoal-light/70 mt-0.5">{cat.desc}</p>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
         </div>
 
+        {/* 전문특화계정 */}
         <div className="col-span-2">
-          <label className="flex items-center gap-3 cursor-pointer">
+          <label className="flex items-start gap-3 cursor-pointer p-3 rounded-2xl border border-border-soft bg-white/40 hover:bg-white/60 transition-colors">
             <input
               type="checkbox"
               checked={data.is_niche_account}
               onChange={(e) => update("is_niche_account", e.target.checked)}
-              className="w-5 h-5 rounded-lg border-border-soft text-sage focus:ring-sage/30"
+              className="mt-0.5 w-4 h-4 rounded border-border-soft text-sage focus:ring-sage/30"
             />
-            <span className="text-sm text-charcoal">
-              전문 특화 계정 <span className="text-charcoal-light/60">(좋아요·댓글이 적어도 정상인 계정)</span>
-            </span>
+            <div>
+              <p className="text-sm font-medium text-charcoal">
+                전문특화 계정
+              </p>
+              <p className="text-xs text-charcoal-light/70 mt-0.5">
+                특정 지역·매물 타입만 다루는 계정 (예: 도봉구 아파트 전용) — 팔로워·좋아요 수가 적어도 AI가 정상으로 처리합니다
+              </p>
+            </div>
           </label>
         </div>
       </div>

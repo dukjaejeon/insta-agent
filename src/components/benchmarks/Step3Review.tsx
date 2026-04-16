@@ -108,7 +108,7 @@ export function Step3Review({
     <GlassCard padding="lg">
       <div className="flex items-center justify-between mb-1">
         <h2 className="text-lg font-semibold text-charcoal">
-          Step 3. 게시물 입력
+          Step 3. 게시물 확인·수정
         </h2>
         <button
           type="button"
@@ -118,10 +118,13 @@ export function Step3Review({
           AI 자동 추출 재시도
         </button>
       </div>
-      <p className="text-sm text-charcoal-light mb-5">
-        경쟁 계정의 게시물을 입력하세요.
-        <span className="ml-1 text-charcoal-light/60">좋아요 수, 유형만 입력해도 됩니다.</span>
+      <p className="text-sm text-charcoal-light mb-2">
+        AI가 스크린샷에서 추출한 내용입니다. 확인 후 틀린 부분을 수정하세요.
       </p>
+      <div className="rounded-xl bg-amber-50/50 border border-amber-200/40 p-3 mb-5 text-xs text-amber-700/80 space-y-1">
+        <p><strong>바이럴</strong> 체크박스: 이 계정의 다른 게시물보다 좋아요·댓글이 월등히 많은 "대박 게시물"에 체크하세요. AI가 집중 해부하여 재현 공식을 만듭니다.</p>
+        <p>게시물이 없으면 아래 <strong>&ldquo;게시물 추가&rdquo;</strong>를 눌러 직접 입력할 수 있습니다.</p>
+      </div>
 
       {/* 게시물 목록 */}
       <div className="space-y-2 mb-4">

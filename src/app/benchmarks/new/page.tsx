@@ -288,7 +288,13 @@ export default function NewBenchmarkPage() {
               screenshots={screenshots}
               onScreenshotsChange={setScreenshots}
               accountId={accountId}
-              onNext={() => setCurrentStep(3)}
+              onNext={() => {
+                setCurrentStep(3);
+                // 업로드된 스크린샷이 있으면 자동으로 OCR 실행
+                if (screenshots.some((s) => s.status === "uploaded")) {
+                  setTimeout(handleRunOcr, 300);
+                }
+              }}
               onBack={() => setCurrentStep(1)}
             />
           )}
