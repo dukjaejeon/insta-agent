@@ -31,6 +31,7 @@ const CATEGORIES = [
 export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [ocrStatus, setOcrStatus] = useState<"idle" | "success" | "fail">("idle");
 
   const handleProfileScreenshot = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -70,9 +71,12 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
           following_count: p.following_count ?? data.following_count,
           post_count: p.post_count ?? data.post_count,
         });
+        setOcrStatus("success");
+      } else {
+        setOcrStatus("fail");
       }
     } catch {
-      // API 없으면 수동 입력 유지
+      setOcrStatus("fail");
     } finally {
       setUploading(false);
     }
@@ -82,7 +86,16 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
     onChange({ ...data, [field]: value });
   };
 
-  const canProceed = data.handle.trim().length > 0;
+  const [handleError, setHandleError] = useState(false);
+
+  const handleNext = () => {
+    if (!data.handle.trim()) {
+      setHandleError(true);
+      return;
+    }
+    setHandleError(false);
+    onNext();
+  };
 
   return (
     <GlassCard padding="lg">
@@ -137,6 +150,16 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
             </div>
           )}
         </label>
+        {ocrStatus === "fail" && (
+          <p className="text-xs text-amber-600 mt-2">
+            ⚠️ 자동 입력 실패 — 아래에 직접 입력해주세요
+          </p>
+        )}
+        {ocrStatus === "success" && (
+          <p className="text-xs text-sage-dark mt-2">
+            ✓ 자동 입력 완료 — 내용을 확인하고 수정하세요
+          </p>
+        )}
         <input
           type="file"
           accept="image/*"
@@ -156,8 +179,12 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
             value={data.handle}
             onChange={(e) => update("handle", e.target.value)}
             placeholder="@grace_zip_"
-            className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors"
+            onChange={(e) => { update("handle", e.target.value); setHandleError(false); }}
+            className={`w-full px-4 py-3 rounded-2xl border bg-white/80 text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-2 focus:ring-sage/30 transition-colors ${handleError ? "border-red-400 focus:ring-red-300" : "border-border-soft focus:border-sage"}`}
           />
+          {handleError && (
+            <p className="text-xs text-red-500 mt-1">인스타 아이디를 입력해주세요</p>
+          )}
         </div>
 
         <div className="col-span-2">
@@ -255,8 +282,8 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
       <div className="mt-8 flex justify-end">
         <button
           type="button"
-          onClick={onNext}
-          disabled={!canProceed}
+          onClick={handleNext}
+          disabled={uploading}
           className="px-6 py-2.5 rounded-2xl bg-sage text-white font-medium hover:bg-sage-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           다음
