@@ -177,7 +177,6 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
           <input
             type="text"
             value={data.handle}
-            onChange={(e) => update("handle", e.target.value)}
             placeholder="@grace_zip_"
             onChange={(e) => { update("handle", e.target.value); setHandleError(false); }}
             className={`w-full px-4 py-3 rounded-2xl border bg-white/80 text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-2 focus:ring-sage/30 transition-colors ${handleError ? "border-red-400 focus:ring-red-300" : "border-border-soft focus:border-sage"}`}

@@ -32,6 +32,12 @@ interface Step3Props {
   onBack: () => void;
 }
 
+const MEDIA_LABELS: Record<string, string> = {
+  photo: "사진",
+  carousel: "슬라이드",
+  reel: "릴스",
+};
+
 function newEmptyPost(): ExtractedPost {
   return {
     temp_id: `manual-${Date.now()}-${Math.random()}`,
@@ -92,7 +98,7 @@ export function Step3Review({
         </h2>
         <div className="flex flex-col items-center py-12">
           <div className="w-10 h-10 border-2 border-sage border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-charcoal-light text-sm">분석 중...</p>
+          <p className="text-charcoal-light text-sm">AI 자동 추출 중...</p>
         </div>
       </GlassCard>
     );
@@ -100,7 +106,7 @@ export function Step3Review({
 
   return (
     <GlassCard padding="lg">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-1">
         <h2 className="text-lg font-semibold text-charcoal">
           Step 3. 게시물 입력
         </h2>
@@ -109,15 +115,16 @@ export function Step3Review({
           onClick={onRunOcr}
           className="text-xs text-sage-dark hover:underline"
         >
-          AI 자동 추출 시도
+          AI 자동 추출 재시도
         </button>
       </div>
-      <p className="text-sm text-charcoal-light mb-6">
-        경쟁 계정의 게시물 정보를 입력해 주세요. {posts.length > 0 && `${posts.length}개 입력됨`}
+      <p className="text-sm text-charcoal-light mb-5">
+        경쟁 계정의 게시물을 입력하세요.
+        <span className="ml-1 text-charcoal-light/60">좋아요 수, 유형만 입력해도 됩니다.</span>
       </p>
 
       {/* 게시물 목록 */}
-      <div className="space-y-3 mb-4">
+      <div className="space-y-2 mb-4">
         {posts.map((post, idx) => (
           <div
             key={post.temp_id}
@@ -125,46 +132,60 @@ export function Step3Review({
           >
             {/* 요약 행 */}
             <div
-              className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/60 transition-colors"
+              className="flex items-center gap-2 px-3 py-3 cursor-pointer hover:bg-white/60 transition-colors"
               onClick={() => setExpandedIdx(expandedIdx === idx ? null : idx)}
             >
-              <span className="text-xs font-mono text-charcoal-light w-6">
-                #{idx + 1}
+              {/* 번호 */}
+              <span className="text-xs text-charcoal-light/60 w-5 shrink-0 text-center">
+                {idx + 1}
               </span>
-              <span className="text-sm font-medium text-charcoal w-16 shrink-0">
-                {post.media_type === "carousel"
-                  ? `슬라이드 ${post.slide_count}장`
-                  : post.media_type === "reel"
-                  ? "릴스"
-                  : "사진"}
+
+              {/* 유형 뱃지 */}
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-sage/10 text-sage-dark shrink-0">
+                {MEDIA_LABELS[post.media_type]}
+                {post.media_type === "carousel" ? ` ${post.slide_count}장` : ""}
               </span>
-              <span className="text-sm text-charcoal-light flex-1 truncate">
-                {post.caption || "(캡션 없음)"}
+
+              {/* 좋아요 */}
+              <span className="text-sm text-charcoal-light shrink-0 w-20">
+                {post.like_count != null
+                  ? `❤️ ${post.like_count.toLocaleString()}`
+                  : <span className="text-charcoal-light/40 text-xs">좋아요 미입력</span>}
               </span>
-              <span className="text-xs text-charcoal-light shrink-0">
-                {post.like_count != null ? `❤️ ${post.like_count.toLocaleString()}` : ""}
+
+              {/* 게시 시기 */}
+              <span className="text-xs text-charcoal-light/60 flex-1 truncate">
+                {post.posted_relative || "시기 미입력"}
               </span>
+
+              {/* 바이럴 체크 */}
               <label
-                className="flex items-center gap-1"
+                className="flex items-center gap-1 shrink-0"
                 onClick={(e) => e.stopPropagation()}
               >
                 <input
                   type="checkbox"
                   checked={post.is_viral_manual}
                   onChange={(e) => updatePost(idx, { is_viral_manual: e.target.checked })}
-                  className="w-4 h-4 rounded text-red-500"
+                  className="w-3.5 h-3.5 rounded text-red-500"
                 />
-                <span className="text-xs text-red-500 font-medium">대박</span>
+                <span className="text-xs text-red-500 font-medium">바이럴</span>
               </label>
+
+              {/* 삭제 */}
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); removePost(idx); }}
-                className="text-xs text-charcoal-light/40 hover:text-red-400 transition-colors px-1"
+                className="text-charcoal-light/30 hover:text-red-400 transition-colors px-1 shrink-0"
               >
-                ✕
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
+
+              {/* 펼침 화살표 */}
               <svg
-                className={`w-4 h-4 text-charcoal-light transition-transform shrink-0 ${expandedIdx === idx ? "rotate-180" : ""}`}
+                className={`w-4 h-4 text-charcoal-light/40 transition-transform shrink-0 ${expandedIdx === idx ? "rotate-180" : ""}`}
                 fill="none" stroke="currentColor" viewBox="0 0 24 24"
               >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -173,11 +194,11 @@ export function Step3Review({
 
             {/* 확장 편집 */}
             {expandedIdx === idx && (
-              <div className="px-4 py-4 border-t border-border-soft bg-white/30">
+              <div className="px-4 py-4 border-t border-border-soft bg-white/30 space-y-3">
+                {/* 유형 + 슬라이드 수 */}
                 <div className="grid grid-cols-2 gap-3">
-                  {/* 미디어 타입 */}
                   <div>
-                    <label className="block text-xs font-medium text-charcoal-light mb-1">게시물 형식</label>
+                    <label className="block text-xs font-medium text-charcoal-light mb-1">게시물 유형</label>
                     <select
                       value={post.media_type}
                       onChange={(e) => updatePost(idx, { media_type: e.target.value as "photo" | "carousel" | "reel" })}
@@ -188,8 +209,6 @@ export function Step3Review({
                       <option value="reel">릴스 (동영상)</option>
                     </select>
                   </div>
-
-                  {/* 슬라이드 수 */}
                   {post.media_type === "carousel" && (
                     <div>
                       <label className="block text-xs font-medium text-charcoal-light mb-1">슬라이드 수</label>
@@ -202,8 +221,10 @@ export function Step3Review({
                       />
                     </div>
                   )}
+                </div>
 
-                  {/* 좋아요 */}
+                {/* 좋아요 / 댓글 */}
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-charcoal-light mb-1">좋아요 수</label>
                     <input
@@ -214,8 +235,6 @@ export function Step3Review({
                       className="w-full px-3 py-2 rounded-xl border border-border-soft bg-white/80 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30"
                     />
                   </div>
-
-                  {/* 댓글 */}
                   <div>
                     <label className="block text-xs font-medium text-charcoal-light mb-1">댓글 수</label>
                     <input
@@ -226,65 +245,58 @@ export function Step3Review({
                       className="w-full px-3 py-2 rounded-xl border border-border-soft bg-white/80 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30"
                     />
                   </div>
+                </div>
 
-                  {/* 조회수 (릴스) */}
-                  {post.media_type === "reel" && (
-                    <div className="col-span-2">
-                      <label className="block text-xs font-medium text-charcoal-light mb-1">조회수</label>
-                      <input
-                        type="number"
-                        value={post.view_count ?? ""}
-                        onChange={(e) => updatePost(idx, { view_count: e.target.value ? Number(e.target.value) : null })}
-                        placeholder="예: 3200"
-                        className="w-full px-3 py-2 rounded-xl border border-border-soft bg-white/80 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30"
-                      />
-                    </div>
-                  )}
-
-                  {/* 캡션 */}
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-charcoal-light mb-1">캡션 (게시글 내용)</label>
-                    <textarea
-                      value={post.caption}
-                      onChange={(e) => updatePost(idx, { caption: e.target.value })}
-                      rows={3}
-                      placeholder="인스타그램 게시물 내용을 입력하세요"
-                      className="w-full px-3 py-2 rounded-xl border border-border-soft bg-white/80 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 resize-none"
+                {/* 조회수 (릴스만) */}
+                {post.media_type === "reel" && (
+                  <div>
+                    <label className="block text-xs font-medium text-charcoal-light mb-1">조회수</label>
+                    <input
+                      type="number"
+                      value={post.view_count ?? ""}
+                      onChange={(e) => updatePost(idx, { view_count: e.target.value ? Number(e.target.value) : null })}
+                      placeholder="예: 3200"
+                      className="w-full px-3 py-2 rounded-xl border border-border-soft bg-white/80 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30"
                     />
                   </div>
+                )}
 
-                  {/* 게시 시기 */}
-                  <div className="col-span-2">
-                    <label className="block text-xs font-medium text-charcoal-light mb-1">게시 시기</label>
-                    <select
-                      value={post.posted_relative}
-                      onChange={(e) => updatePost(idx, { posted_relative: e.target.value, within_scope: !e.target.value.includes("4개월") && !e.target.value.includes("5개월") && !e.target.value.includes("6개월") && !e.target.value.includes("년") })}
-                      className="w-full px-3 py-2 rounded-xl border border-border-soft bg-white/80 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30"
-                    >
-                      <option value="">선택</option>
-                      <option value="1주일 전">1주일 전</option>
-                      <option value="2주일 전">2주일 전</option>
-                      <option value="1개월 전">1개월 전</option>
-                      <option value="2개월 전">2개월 전</option>
-                      <option value="3개월 전">3개월 전</option>
-                      <option value="4개월 전">4개월 전 (분석 제외)</option>
-                      <option value="6개월 전">6개월 전 (분석 제외)</option>
-                      <option value="1년 전">1년 전 (분석 제외)</option>
-                    </select>
-                  </div>
+                {/* 게시 시기 */}
+                <div>
+                  <label className="block text-xs font-medium text-charcoal-light mb-1">게시 시기</label>
+                  <select
+                    value={post.posted_relative}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      const outOfScope = val.includes("4개월") || val.includes("5개월") || val.includes("6개월") || val.includes("년");
+                      updatePost(idx, { posted_relative: val, within_scope: !outOfScope });
+                    }}
+                    className="w-full px-3 py-2 rounded-xl border border-border-soft bg-white/80 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30"
+                  >
+                    <option value="">선택</option>
+                    <option value="1주일 전">1주일 전</option>
+                    <option value="2주일 전">2주일 전</option>
+                    <option value="1개월 전">1개월 전</option>
+                    <option value="2개월 전">2개월 전</option>
+                    <option value="3개월 전">3개월 전</option>
+                    <option value="4개월 전">4개월 전 (분석 제외)</option>
+                    <option value="6개월 전">6개월 전 (분석 제외)</option>
+                    <option value="1년 전">1년 전 (분석 제외)</option>
+                  </select>
+                </div>
 
-                  {/* 하이라이트 */}
-                  <div className="col-span-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={post.is_from_highlight}
-                        onChange={(e) => updatePost(idx, { is_from_highlight: e.target.checked })}
-                        className="w-4 h-4 rounded text-sage"
-                      />
-                      <span className="text-sm text-charcoal">하이라이트 게시물</span>
-                    </label>
-                  </div>
+                {/* 캡션 (선택) */}
+                <div>
+                  <label className="block text-xs font-medium text-charcoal-light mb-1">
+                    게시글 내용 <span className="font-normal text-charcoal-light/60">(선택)</span>
+                  </label>
+                  <textarea
+                    value={post.caption}
+                    onChange={(e) => updatePost(idx, { caption: e.target.value })}
+                    rows={2}
+                    placeholder="게시물 본문 내용 (없어도 됩니다)"
+                    className="w-full px-3 py-2 rounded-xl border border-border-soft bg-white/80 text-sm text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 resize-none"
+                  />
                 </div>
               </div>
             )}
@@ -315,10 +327,10 @@ export function Step3Review({
         <button
           type="button"
           onClick={onNext}
-          disabled={inScopePosts.length === 0}
+          disabled={posts.length === 0}
           className="px-6 py-2.5 rounded-2xl bg-sage text-white font-medium hover:bg-sage-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          다음: 분석 설정 ({inScopePosts.length}개)
+          다음 ({inScopePosts.length}개 분석)
         </button>
       </div>
     </GlassCard>
