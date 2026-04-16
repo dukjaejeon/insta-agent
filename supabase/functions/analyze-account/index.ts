@@ -283,9 +283,9 @@ Deno.serve(async (req: Request) => {
           messages: [{ role: "user", content: userContent }],
           maxTokens: 3000,
         });
-        const cost = estimateCost("claude-opus-4", aUsage.input_tokens, aUsage.output_tokens);
+        const cost = estimateCost("claude-opus-4-6", aUsage.input_tokens, aUsage.output_tokens);
         totalCostUsd += cost; llmCallCount++;
-        await logLlm("autopsy", "claude-opus-4", aUsage.input_tokens, aUsage.output_tokens, cost);
+        await logLlm("autopsy", "claude-opus-4-6", aUsage.input_tokens, aUsage.output_tokens, cost);
 
         const aJson = JSON.parse((aText.match(/\{[\s\S]*\}/) || ["{}"])[0]) as Record<string, unknown>;
         await adminClient.from("viral_autopsies").upsert({

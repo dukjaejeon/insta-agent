@@ -132,7 +132,7 @@ Deno.serve(async (req: Request) => {
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const summary = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-    const costUsd = estimateCost("claude-opus-4-20250514", usage.input_tokens, usage.output_tokens);
+    const costUsd = estimateCost("claude-opus-4-6", usage.input_tokens, usage.output_tokens);
 
     // 델타 저장
     const deltaData = {
@@ -160,7 +160,7 @@ Deno.serve(async (req: Request) => {
     await adminClient.from("llm_calls").insert({
       analysis_id: curr.id,
       stage: "delta",
-      model: "claude-opus-4-20250514",
+      model: "claude-opus-4-6",
       input_tokens: usage.input_tokens,
       output_tokens: usage.output_tokens,
       cost_usd: costUsd,

@@ -11,7 +11,7 @@ interface AnthropicResponse {
 }
 
 export async function callClaude({
-  model = "claude-opus-4-20250514",
+  model = "claude-opus-4-6",
   system,
   messages,
   maxTokens = 4096,
@@ -58,10 +58,14 @@ export function estimateCost(
   inputTokens: number,
   outputTokens: number
 ): number {
-  // Opus 4 pricing (per 1M tokens): $15 input, $75 output
-  // Haiku pricing (per 1M tokens): $0.25 input, $1.25 output
+  // Haiku 4.5: $0.80/$4 per 1M tokens
   if (model.includes("haiku")) {
-    return (inputTokens * 0.25 + outputTokens * 1.25) / 1_000_000;
+    return (inputTokens * 0.80 + outputTokens * 4.0) / 1_000_000;
   }
-  return (inputTokens * 15 + outputTokens * 75) / 1_000_000;
+  // Sonnet 4.6: $3/$15 per 1M tokens
+  if (model.includes("sonnet")) {
+    return (inputTokens * 3.0 + outputTokens * 15.0) / 1_000_000;
+  }
+  // Opus 4.6: $15/$75 per 1M tokens
+  return (inputTokens * 15.0 + outputTokens * 75.0) / 1_000_000;
 }

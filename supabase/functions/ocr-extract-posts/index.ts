@@ -91,7 +91,7 @@ serve(async (req) => {
         maxTokens: 2048,
       });
 
-      const cost = estimateCost("claude-opus-4", usage.input_tokens, usage.output_tokens);
+      const cost = estimateCost("claude-opus-4-6", usage.input_tokens, usage.output_tokens);
       totalCostUsd += cost;
 
       // JSON 파싱
@@ -108,7 +108,7 @@ serve(async (req) => {
       await adminClient.from("llm_calls").insert({
         analysis_id: null,
         stage: "ocr",
-        model: "claude-opus-4",
+        model: "claude-opus-4-6",
         input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
         cost_usd: cost,

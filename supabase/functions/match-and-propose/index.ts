@@ -138,7 +138,7 @@ ${playbookContext}
     if (!jsonMatch) throw new Error("LLM이 JSON을 반환하지 않았습니다");
 
     const proposal = JSON.parse(jsonMatch[0]);
-    const costUsd = estimateCost("claude-opus-4-20250514", usage.input_tokens, usage.output_tokens);
+    const costUsd = estimateCost("claude-opus-4-6", usage.input_tokens, usage.output_tokens);
 
     // DB에 제안 저장
     const { data: savedProposal, error: insertError } = await adminClient
@@ -165,7 +165,7 @@ ${playbookContext}
     // LLM 호출 로그
     await adminClient.from("llm_calls").insert({
       stage: "match-and-propose",
-      model: "claude-opus-4-20250514",
+      model: "claude-opus-4-6",
       input_tokens: usage.input_tokens,
       output_tokens: usage.output_tokens,
       cost_usd: costUsd,
