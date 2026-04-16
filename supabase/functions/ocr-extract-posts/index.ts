@@ -48,14 +48,19 @@ serve(async (req) => {
         continue;
       }
 
-      // 이미지를 base64로 변환
+      // 이미지를 base64로 변환 (대용량 이미지 스택 오버플로우 방지)
       const imgResponse = await fetch(signedData.signedUrl);
       const imgBuffer = await imgResponse.arrayBuffer();
-      const imgBase64 = btoa(
-        String.fromCharCode(...new Uint8Array(imgBuffer))
-      );
-      const imgMediaType =
-        imgResponse.headers.get("content-type") || "image/jpeg";
+      const uint8 = new Uint8Array(imgBuffer);
+      let binary = "";
+      const CHUNK = 8192;
+      for (let i = 0; i < uint8.length; i += CHUNK) {
+        binary += String.fromCharCode(...uint8.subarray(i, i + CHUNK));
+      }
+      const imgBase64 = btoa(binary);
+      // content-type에서 파라미터 제거 (e.g. "image/jpeg; charset=utf-8" → "image/jpeg")
+      const rawCT = imgResponse.headers.get("content-type") || "image/jpeg";
+      const imgMediaType = rawCT.split(";")[0].trim() || "image/jpeg";
 
       // 스크린샷 타입별 프롬프트 선택
       let userPrompt: string;
@@ -68,6 +73,7 @@ serve(async (req) => {
       }
 
       const { text, usage } = await callClaude({
+        model: "claude-sonnet-4-6",
         system: OCR_SYSTEM,
         messages: [
           {
@@ -91,16 +97,21 @@ serve(async (req) => {
         maxTokens: 2048,
       });
 
-      const cost = estimateCost("claude-opus-4-6", usage.input_tokens, usage.output_tokens);
+      const cost = estimateCost("claude-sonnet-4-6", usage.input_tokens, usage.output_tokens);
       totalCostUsd += cost;
 
       // JSON 파싱
+      console.log(`OCR 응답 [${shot.screenshot_type}] 길이=${text.length} 앞100자:`, text.slice(0, 100));
       let parsed: Record<string, unknown>;
       try {
         const jsonMatch = text.match(/\{[\s\S]*\}/);
-        parsed = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
-      } catch {
-        console.error("JSON 파싱 실패:", text.slice(0, 200));
+        if (!jsonMatch) {
+          console.error("JSON 없음 — 전체 응답:", text.slice(0, 500));
+          continue;
+        }
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch (parseErr) {
+        console.error("JSON 파싱 실패:", parseErr, text.slice(0, 300));
         continue;
       }
 
@@ -108,7 +119,7 @@ serve(async (req) => {
       await adminClient.from("llm_calls").insert({
         analysis_id: null,
         stage: "ocr",
-        model: "claude-opus-4-6",
+        model: "claude-sonnet-4-6",
         input_tokens: usage.input_tokens,
         output_tokens: usage.output_tokens,
         cost_usd: cost,
