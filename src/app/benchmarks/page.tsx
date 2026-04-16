@@ -14,6 +14,17 @@ type BenchmarkAccount =
 export default function BenchmarksPage() {
   const [accounts, setAccounts] = useState<BenchmarkAccount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (e: React.MouseEvent, account: BenchmarkAccount) => {
+    e.preventDefault();
+    if (!confirm(`"${account.handle}" 계정을 삭제하시겠습니까?`)) return;
+    setDeletingId(account.id);
+    const supabase = createClient();
+    await supabase.from("benchmark_accounts").delete().eq("id", account.id);
+    setAccounts((prev) => prev.filter((a) => a.id !== account.id));
+    setDeletingId(null);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -80,41 +91,58 @@ export default function BenchmarksPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {accounts.map((account) => (
-                <Link key={account.id} href={`/benchmarks/${account.id}`}>
-                  <GlassCard className="hover:shadow-lg transition-shadow cursor-pointer">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <h3 className="font-semibold text-charcoal">
-                          {account.handle}
-                        </h3>
-                        {account.display_name && (
-                          <p className="text-sm text-charcoal-light">
-                            {account.display_name}
-                          </p>
+                <div key={account.id} className="relative group">
+                  <Link href={`/benchmarks/${account.id}`}>
+                    <GlassCard className="hover:shadow-lg transition-shadow cursor-pointer">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="font-semibold text-charcoal">
+                            {account.handle}
+                          </h3>
+                          {account.display_name && (
+                            <p className="text-sm text-charcoal-light">
+                              {account.display_name}
+                            </p>
+                          )}
+                        </div>
+                        {account.is_niche_account && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sage-light/30 text-sage-dark">
+                            니치
+                          </span>
                         )}
                       </div>
-                      {account.is_niche_account && (
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sage-light/30 text-sage-dark">
-                          니치
-                        </span>
+                      <div className="flex items-center gap-4 text-sm text-charcoal-light">
+                        {account.follower_count != null && (
+                          <span>팔로워 {account.follower_count.toLocaleString()}</span>
+                        )}
+                        {account.post_count != null && (
+                          <span>게시물 {account.post_count}</span>
+                        )}
+                      </div>
+                      {account.last_analyzed_at && (
+                        <p className="text-xs text-charcoal-light/60 mt-3">
+                          마지막 분석:{" "}
+                          {new Date(account.last_analyzed_at).toLocaleDateString("ko-KR")}
+                        </p>
                       )}
-                    </div>
-                    <div className="flex items-center gap-4 text-sm text-charcoal-light">
-                      {account.follower_count != null && (
-                        <span>팔로워 {account.follower_count.toLocaleString()}</span>
-                      )}
-                      {account.post_count != null && (
-                        <span>게시물 {account.post_count}</span>
-                      )}
-                    </div>
-                    {account.last_analyzed_at && (
-                      <p className="text-xs text-charcoal-light/60 mt-3">
-                        마지막 분석:{" "}
-                        {new Date(account.last_analyzed_at).toLocaleDateString("ko-KR")}
-                      </p>
+                    </GlassCard>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDelete(e, account)}
+                    disabled={deletingId === account.id}
+                    className="absolute top-3 right-3 w-7 h-7 rounded-lg bg-white/90 border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors opacity-0 group-hover:opacity-100 flex items-center justify-center disabled:opacity-50 z-10"
+                    title="삭제"
+                  >
+                    {deletingId === account.id ? (
+                      <span className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     )}
-                  </GlassCard>
-                </Link>
+                  </button>
+                </div>
               ))}
             </div>
           )}
