@@ -217,28 +217,24 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
         </div>
 
         <div className="col-span-2">
-          <label className="block text-sm font-medium text-charcoal mb-2">
+          <label className="block text-sm font-medium text-charcoal mb-1.5">
             계정 유형
+            <span className="text-xs text-charcoal-light/60 font-normal ml-2">
+              (바이럴 기준 설정에 사용)
+            </span>
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <select
+            value={data.category}
+            onChange={(e) => update("category", e.target.value)}
+            className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors"
+          >
+            <option value="">선택하세요</option>
             {CATEGORIES.map((cat) => (
-              <button
-                key={cat.value}
-                type="button"
-                onClick={() => update("category", cat.value)}
-                className={`p-3 rounded-xl border text-left transition-colors ${
-                  data.category === cat.value
-                    ? "border-sage bg-sage/5"
-                    : "border-border-soft hover:bg-white/80"
-                }`}
-              >
-                <p className={`text-sm font-medium ${data.category === cat.value ? "text-sage-dark" : "text-charcoal"}`}>
-                  {cat.label}
-                </p>
-                <p className="text-xs text-charcoal-light/60 mt-0.5">{cat.desc}</p>
-              </button>
+              <option key={cat.value} value={cat.value}>
+                {cat.label} — {cat.desc}
+              </option>
             ))}
-          </div>
+          </select>
         </div>
 
         <div className="col-span-2">
