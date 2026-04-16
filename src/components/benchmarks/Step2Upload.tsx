@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, getCurrentUserId } from "@/lib/supabase/client";
 
 export interface UploadedScreenshot {
   file: File;
@@ -32,10 +32,7 @@ export function Step2Upload({
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+      const userId = getCurrentUserId();
 
       const newScreenshots: UploadedScreenshot[] = Array.from(files).map(
         (file) => ({
@@ -56,7 +53,7 @@ export function Step2Upload({
       for (let i = 0; i < newScreenshots.length; i++) {
         const idx = startIdx + i;
         const file = newScreenshots[i].file;
-        const path = `${user.id}/${accountId || "temp"}/${Date.now()}-${i}-${file.name}`;
+        const path = `${userId}/${accountId || "temp"}/${Date.now()}-${i}-${file.name}`;
 
         updated[idx] = { ...updated[idx], status: "uploading" };
         onScreenshotsChange([...updated]);
