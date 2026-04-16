@@ -1,0 +1,10 @@
+# API 키 유출 방지 — staged 파일에서 Anthropic/Supabase 키 패턴 검색
+if git diff --cached --name-only | xargs grep -l 'sk-ant-' 2>/dev/null; then
+  echo "ERROR: Anthropic API key detected in staged files!"
+  exit 1
+fi
+
+if git diff --cached --name-only | xargs grep -l 'SUPABASE_SERVICE_ROLE_KEY' 2>/dev/null; then
+  echo "ERROR: Supabase service role key reference detected in staged files!"
+  exit 1
+fi
