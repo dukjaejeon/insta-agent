@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, getCurrentUserId } from "@/lib/supabase/client";
 
 interface AccountData {
   handle: string;
@@ -21,8 +21,16 @@ interface Step1Props {
   onNext: () => void;
 }
 
+const CATEGORIES = [
+  { value: "프리미엄", label: "프리미엄", desc: "강남·고가 아파트 (10억+)" },
+  { value: "일반", label: "일반", desc: "중간 가격대 아파트 (3~10억)" },
+  { value: "실속형", label: "실속형", desc: "빌라·다세대·소형 (3억 이하)" },
+  { value: "전문특화", label: "전문특화", desc: "특정 지역·타입 전문 계정" },
+];
+
 export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
-  const [ocrLoading, setOcrLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   const handleProfileScreenshot = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -30,25 +38,23 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setOcrLoading(true);
+    // 미리보기 즉시 표시
+    setPreviewUrl(URL.createObjectURL(file));
+    setUploading(true);
+
     try {
       const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const path = `${user.id}/profile-temp/${Date.now()}-${file.name}`;
+      const userId = getCurrentUserId();
+      const path = `${userId}/profile-temp/${Date.now()}-${file.name}`;
       await supabase.storage.from("screenshots").upload(path, file);
 
+      // API 키 있으면 OCR 자동 추출
       const { data: fnData, error } = await supabase.functions.invoke(
         "ocr-extract-posts",
         {
           body: {
             account_id: null,
-            screenshots: [
-              { storage_path: path, screenshot_type: "profile" },
-            ],
+            screenshots: [{ storage_path: path, screenshot_type: "profile" }],
           },
         }
       );
@@ -66,9 +72,9 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
         });
       }
     } catch {
-      // OCR 실패 시 수동 입력 유지
+      // API 없으면 수동 입력 유지
     } finally {
-      setOcrLoading(false);
+      setUploading(false);
     }
   };
 
@@ -84,39 +90,66 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
         Step 1. 계정 정보
       </h2>
 
-      {/* 프로필 스크린샷 OCR */}
+      {/* 프로필 스크린샷 업로드 */}
       <div className="mb-6">
         <label className="block text-sm font-medium text-charcoal mb-2">
-          프로필 스크린샷 (선택)
+          프로필 스크린샷
+          <span className="text-xs text-charcoal-light/60 font-normal ml-2">
+            (사진 올리면 자동 입력)
+          </span>
         </label>
-        <div className="border-2 border-dashed border-border-soft rounded-2xl p-6 text-center">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleProfileScreenshot}
-            className="hidden"
-            id="profile-screenshot"
-          />
-          <label
-            htmlFor="profile-screenshot"
-            className="cursor-pointer text-sm text-charcoal-light hover:text-sage transition-colors"
-          >
-            {ocrLoading ? (
-              <span className="flex items-center justify-center gap-2">
-                <div className="w-4 h-4 border-2 border-sage border-t-transparent rounded-full animate-spin" />
-                OCR 분석 중...
-              </span>
-            ) : (
-              "프로필 스크린샷을 올리면 자동으로 채워집니다"
-            )}
-          </label>
-        </div>
+
+        <label
+          htmlFor="profile-screenshot"
+          className="cursor-pointer block"
+        >
+          {previewUrl ? (
+            <div className="relative rounded-2xl overflow-hidden border border-border-soft">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={previewUrl}
+                alt="프로필 스크린샷"
+                className="w-full max-h-48 object-cover"
+              />
+              {uploading && (
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center gap-2">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span className="text-white text-sm">분석 중...</span>
+                </div>
+              )}
+              {!uploading && (
+                <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded-lg">
+                  탭하여 교체
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-border-soft rounded-2xl p-8 text-center hover:border-sage/40 transition-colors">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-sage/10 flex items-center justify-center">
+                <svg className="w-6 h-6 text-sage" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-charcoal">사진 업로드</p>
+              <p className="text-xs text-charcoal-light/60 mt-1">
+                인스타그램 프로필 스크린샷
+              </p>
+            </div>
+          )}
+        </label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleProfileScreenshot}
+          className="hidden"
+          id="profile-screenshot"
+        />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2">
           <label className="block text-sm font-medium text-charcoal mb-1.5">
-            핸들 *
+            인스타 아이디 *
           </label>
           <input
             type="text"
@@ -129,7 +162,7 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
 
         <div className="col-span-2">
           <label className="block text-sm font-medium text-charcoal mb-1.5">
-            표시 이름
+            계정 이름
           </label>
           <input
             type="text"
@@ -142,11 +175,12 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
 
         <div className="col-span-2">
           <label className="block text-sm font-medium text-charcoal mb-1.5">
-            바이오
+            계정 소개글
           </label>
           <textarea
             value={data.bio}
             onChange={(e) => update("bio", e.target.value)}
+            placeholder="인스타 프로필 소개글"
             rows={3}
             className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors resize-none"
           />
@@ -154,7 +188,7 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
 
         <div>
           <label className="block text-sm font-medium text-charcoal mb-1.5">
-            팔로워
+            팔로워 수
           </label>
           <input
             type="number"
@@ -162,20 +196,7 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
             onChange={(e) =>
               update("follower_count", e.target.value ? Number(e.target.value) : null)
             }
-            className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-charcoal mb-1.5">
-            팔로잉
-          </label>
-          <input
-            type="number"
-            value={data.following_count ?? ""}
-            onChange={(e) =>
-              update("following_count", e.target.value ? Number(e.target.value) : null)
-            }
+            placeholder="3200"
             className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors"
           />
         </div>
@@ -190,25 +211,34 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
             onChange={(e) =>
               update("post_count", e.target.value ? Number(e.target.value) : null)
             }
+            placeholder="120"
             className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors"
           />
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-charcoal mb-1.5">
-            카테고리
+        <div className="col-span-2">
+          <label className="block text-sm font-medium text-charcoal mb-2">
+            계정 유형
           </label>
-          <select
-            value={data.category}
-            onChange={(e) => update("category", e.target.value)}
-            className="w-full px-4 py-3 rounded-2xl border border-border-soft bg-white/80 text-charcoal focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage transition-colors"
-          >
-            <option value="">선택</option>
-            <option value="고급">고급</option>
-            <option value="중산">중산</option>
-            <option value="대중">대중</option>
-            <option value="니치">니치</option>
-          </select>
+          <div className="grid grid-cols-2 gap-2">
+            {CATEGORIES.map((cat) => (
+              <button
+                key={cat.value}
+                type="button"
+                onClick={() => update("category", cat.value)}
+                className={`p-3 rounded-xl border text-left transition-colors ${
+                  data.category === cat.value
+                    ? "border-sage bg-sage/5"
+                    : "border-border-soft hover:bg-white/80"
+                }`}
+              >
+                <p className={`text-sm font-medium ${data.category === cat.value ? "text-sage-dark" : "text-charcoal"}`}>
+                  {cat.label}
+                </p>
+                <p className="text-xs text-charcoal-light/60 mt-0.5">{cat.desc}</p>
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="col-span-2">
@@ -220,7 +250,7 @@ export function Step1AccountInfo({ data, onChange, onNext }: Step1Props) {
               className="w-5 h-5 rounded-lg border-border-soft text-sage focus:ring-sage/30"
             />
             <span className="text-sm text-charcoal">
-              니치 계정 (부동산처럼 engagement가 낮은 것이 정상인 계정)
+              전문 특화 계정 <span className="text-charcoal-light/60">(좋아요·댓글이 적어도 정상인 계정)</span>
             </span>
           </label>
         </div>
