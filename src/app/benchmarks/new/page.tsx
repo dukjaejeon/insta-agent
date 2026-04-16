@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Navigation } from "@/components/layout/Navigation";
 import { AuthGuard } from "@/components/layout/AuthGuard";
@@ -62,7 +62,13 @@ export default function NewBenchmarkPage() {
   const [analysisStatus, setAnalysisStatus] = useState<
     "idle" | "running" | "completed" | "failed"
   >("idle");
+  const analysisStatusRef = useRef<"idle" | "running" | "completed" | "failed">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const setAnalysisStatusSafe = (s: "idle" | "running" | "completed" | "failed") => {
+    analysisStatusRef.current = s;
+    setAnalysisStatus(s);
+  };
 
   // Step 1 → 2: 계정 저장
   const handleStep1Next = async () => {
@@ -174,92 +180,88 @@ export default function NewBenchmarkPage() {
   const handleStartAnalysis = async () => {
     if (!accountId) return;
     setCurrentStep(5);
-    setAnalysisStatus("running");
+    setAnalysisStatusSafe("running");
     setErrorMessage(null);
+    setStages(defaultStages);
+
+    const supabase = createClient();
+
+    // ── Realtime 채널을 함수 호출 전에 먼저 구독 ──
+    // channel_name을 미리 정해서 Edge Function에 전달
+    const channelName = `analysis:${accountId}:${Date.now()}`;
+    const channel = supabase.channel(channelName);
+
+    channel
+      .on("broadcast", { event: "progress" }, ({ payload }) => {
+        const { stage, status } = payload as { stage: string; status: string };
+        setStages((prev) =>
+          prev.map((s) =>
+            s.key === stage
+              ? { ...s, status: status as "running" | "completed" | "failed" }
+              : s
+          )
+        );
+        if (status === "completed" && stage === "report") {
+          setAnalysisStatusSafe("completed");
+          channel.unsubscribe();
+        }
+      })
+      .on("broadcast", { event: "error" }, ({ payload }) => {
+        setAnalysisStatusSafe("failed");
+        setErrorMessage((payload as { message: string }).message || "분석 중 오류 발생");
+        channel.unsubscribe();
+      })
+      .subscribe();
+
+    // 첫 단계 running 표시
+    setStages((prev) => prev.map((s, i) => i === 0 ? { ...s, status: "running" } : s));
 
     try {
-      const supabase = createClient();
-
-      // 먼저 게시물들을 DB에 저장
-      type PostInsert = Database["public"]["Tables"]["benchmark_posts"]["Insert"];
+      // 게시물 데이터를 Edge Function에 전달 (admin client로 저장하여 RLS 우회)
       const inScopePosts = extractedPosts.filter((p) => p.within_scope);
-      for (const post of inScopePosts) {
-        const postPayload: PostInsert = {
-          account_id: accountId,
-          media_type: post.media_type,
-          slide_count: post.slide_count,
-          caption: post.caption,
-          hashtags: post.hashtags,
-          like_count: post.like_count,
-          comment_count: post.comment_count,
-          view_count: post.view_count,
-          top_comments: post.top_comments,
-          tier_manual_override: post.is_viral_manual ? "viral" : null,
-          is_from_highlight: post.is_from_highlight,
-          within_scope: post.within_scope,
-          screenshot_paths: post.screenshot_paths,
-        };
-        await supabase.from("benchmark_posts").insert(postPayload);
-      }
 
-      // 분석 시작 (Edge Function 호출)
-      const { data, error } = await supabase.functions.invoke(
-        "analyze-account",
-        {
-          body: {
-            account_id: accountId,
-            analysis_type: "initial",
-          },
-        }
-      );
+      const { data, error } = await supabase.functions.invoke("analyze-account", {
+        body: {
+          account_id: accountId,
+          analysis_type: "initial",
+          channel_name: channelName,
+          posts: inScopePosts.map((p) => ({
+            media_type: p.media_type,
+            slide_count: p.slide_count,
+            caption: p.caption,
+            hashtags: p.hashtags,
+            like_count: p.like_count,
+            comment_count: p.comment_count,
+            view_count: p.view_count,
+            top_comments: p.top_comments,
+            is_viral_manual: p.is_viral_manual,
+            is_from_highlight: p.is_from_highlight,
+            within_scope: p.within_scope,
+            screenshot_paths: p.screenshot_paths,
+          })),
+        },
+      });
 
       if (error) throw error;
 
-      // 분석이 비동기로 진행되므로 Realtime 채널로 진행 상태 수신
-      if (data?.analysis_id) {
-        const channel = supabase.channel(`analysis:${data.analysis_id}`);
-        channel
-          .on("broadcast", { event: "progress" }, ({ payload }) => {
-            const { stage, status } = payload as {
-              stage: string;
-              status: string;
-            };
-            setStages((prev) =>
-              prev.map((s) =>
-                s.key === stage
-                  ? { ...s, status: status as "running" | "completed" | "failed" }
-                  : s
-              )
-            );
-
-            if (status === "completed" && stage === "report") {
-              setAnalysisStatus("completed");
-              channel.unsubscribe();
-            }
-          })
-          .on("broadcast", { event: "error" }, ({ payload }) => {
-            setAnalysisStatus("failed");
-            setErrorMessage(
-              (payload as { message: string }).message ||
-                "분석 중 오류가 발생했습니다"
-            );
-            channel.unsubscribe();
-          })
-          .subscribe();
-
-        // 첫 단계를 running으로 표시
-        setStages((prev) =>
-          prev.map((s, i) =>
-            i === 0 ? { ...s, status: "running" } : s
-          )
-        );
+      // 함수가 성공 응답을 반환했지만 Realtime이 report completed를 아직 못 받은 경우 대비
+      if (data?.analysis_id && analysisStatusRef.current !== "completed") {
+        // 이미 완료됐을 수도 있으므로 DB에서 상태 확인
+        const { data: analysisRow } = await supabase
+          .from("analyses")
+          .select("status")
+          .eq("id", data.analysis_id)
+          .single();
+        if (analysisRow?.status === "completed") {
+          setAnalysisStatusSafe("completed");
+          setStages(defaultStages.map((s) => ({ ...s, status: "completed" })));
+        }
       }
     } catch (err) {
-      setAnalysisStatus("failed");
+      channel.unsubscribe();
+      setAnalysisStatusSafe("failed");
       setErrorMessage(
-        err instanceof Error
-          ? err.message
-          : "분석 시작에 실패했습니다. Edge Function이 배포되었는지 확인해주세요."
+        err instanceof Error ? err.message : "분석 시작에 실패했습니다."
       );
     }
   };
