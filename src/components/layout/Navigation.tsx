@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 const navItems = [
   { href: "/dashboard", label: "대시보드" },
   { href: "/benchmarks", label: "벤치마크" },
+  { href: "/playbooks", label: "Playbook" },
   { href: "/listings", label: "매물" },
   { href: "/calendar", label: "캘린더" },
   { href: "/settings", label: "설정" },

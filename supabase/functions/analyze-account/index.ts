@@ -31,82 +31,117 @@ interface PostInput {
   screenshot_paths: string[];
 }
 
+// Supabase PostgrestBuilder은 PromiseLike만 구현 (.catch() 없음)
+// 안전하게 쿼리를 실행하는 헬퍼
+async function safeQuery<T>(query: PromiseLike<T>): Promise<T | null> {
+  try {
+    return await query;
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   const adminClient = createAdminClient();
+  let analysisId: string | null = null;
+  let broadcastChannel = "";
 
-  const body = await req.json() as {
-    account_id: string;
-    analysis_type?: string;
-    channel_name?: string;
-    posts?: PostInput[];
-  };
-
-  const { account_id, analysis_type = "initial", channel_name, posts: postsInput } = body;
-
-  // 계정 정보 로드
-  const { data: accountRecord, error: acctErr } = await adminClient
-    .from("benchmark_accounts")
-    .select("user_id, follower_count")
-    .eq("id", account_id)
-    .single();
-
-  if (acctErr || !accountRecord) {
-    return new Response(JSON.stringify({ error: "계정을 찾을 수 없습니다" }), {
-      status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  // analyses 레코드 생성
-  const { data: analysis, error: analysisErr } = await adminClient
-    .from("analyses")
-    .insert({
-      account_id,
-      analysis_type,
-      status: "running",
-      started_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-
-  if (analysisErr || !analysis) {
-    return new Response(JSON.stringify({ error: "분석 레코드 생성 실패" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
-  const analysisId = analysis.id;
-
-  // Realtime 브로드캐스트 헬퍼 (channel_name 우선 사용)
-  const broadcastChannel = channel_name || `analysis:${analysisId}`;
-  const broadcast = async (stage: string, status: string) => {
-    try {
-      await adminClient.channel(broadcastChannel).send({
-        type: "broadcast",
-        event: "progress",
-        payload: { stage, status },
-      });
-    } catch { /* 브로드캐스트 실패는 무시 */ }
-  };
-
-  const logLlm = async (stage: string, model: string, inputTokens: number, outputTokens: number, costUsd: number) => {
-    await adminClient.from("llm_calls").insert({
-      analysis_id: analysisId,
-      stage, model,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
-      cost_usd: costUsd,
-      cached: false,
-    }).catch(() => {});
-  };
-
-  let totalCostUsd = 0;
-  let llmCallCount = 0;
-
+  // ── 전체 안전망 ────────────────────────────
   try {
+
+    // 요청 파싱
+    let body: { account_id: string; analysis_type?: string; channel_name?: string; posts?: PostInput[] };
+    try {
+      body = await req.json() as typeof body;
+    } catch {
+      return new Response(JSON.stringify({ error: "요청 형식 오류" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { account_id, analysis_type = "initial", channel_name, posts: postsInput } = body;
+    console.log(`analyze-account 시작: account_id=${account_id}, posts=${postsInput?.length ?? 0}개`);
+
+    // 계정 정보 로드
+    const { data: accountRecord, error: acctErr } = await adminClient
+      .from("benchmark_accounts")
+      .select("user_id, follower_count")
+      .eq("id", account_id)
+      .single();
+
+    if (acctErr || !accountRecord) {
+      console.error("계정 조회 실패:", acctErr);
+      return new Response(JSON.stringify({ error: "계정을 찾을 수 없습니다" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // analyses 레코드 생성
+    const { data: analysis, error: analysisErr } = await adminClient
+      .from("analyses")
+      .insert({
+        account_id,
+        analysis_type,
+        status: "running",
+        started_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (analysisErr || !analysis) {
+      console.error("분석 레코드 생성 실패:", analysisErr);
+      return new Response(JSON.stringify({ error: "분석 레코드 생성 실패" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    analysisId = analysis.id;
+    broadcastChannel = channel_name || `analysis:${analysisId}`;
+
+    // Edge Function에서는 WebSocket 대신 REST API로 브로드캐스트
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const broadcast = async (stage: string, status: string) => {
+      try {
+        await fetch(`${supabaseUrl}/realtime/v1/api/broadcast`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceRoleKey}`,
+            "apikey": serviceRoleKey,
+          },
+          body: JSON.stringify({
+            messages: [{
+              topic: broadcastChannel,
+              event: "progress",
+              payload: { stage, status },
+            }],
+          }),
+        });
+      } catch { /* 브로드캐스트 실패는 무시 */ }
+    };
+
+    const logLlm = async (stage: string, model: string, inputTokens: number, outputTokens: number, costUsd: number) => {
+      try {
+        await adminClient.from("llm_calls").insert({
+          analysis_id: analysisId,
+          stage, model,
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          cost_usd: costUsd,
+          cached: false,
+        });
+      } catch { /* LLM 로그 실패는 무시 */ }
+    };
+
+    let totalCostUsd = 0;
+    let llmCallCount = 0;
+
     // ── 게시물 저장 (클라이언트에서 전달된 경우 admin client로 직접 저장) ──
     if (postsInput && postsInput.length > 0) {
       const inserts = postsInput.map((p) => ({
@@ -124,11 +159,12 @@ Deno.serve(async (req: Request) => {
         within_scope: p.within_scope !== false,
         screenshot_paths: p.screenshot_paths || [],
       }));
-      await adminClient.from("benchmark_posts").insert(inserts);
+      const { error: insertErr } = await adminClient.from("benchmark_posts").insert(inserts);
+      if (insertErr) console.error("게시물 저장 오류 (무시):", insertErr);
     }
 
     // 분석 대상 게시물 로드 (최대 20개)
-    const { data: posts } = await adminClient
+    const { data: posts, error: postsErr } = await adminClient
       .from("benchmark_posts")
       .select("*")
       .eq("account_id", account_id)
@@ -136,8 +172,10 @@ Deno.serve(async (req: Request) => {
       .limit(20);
 
     if (!posts || posts.length === 0) {
-      throw new Error("분석할 게시물이 없습니다. Step 3에서 게시물을 입력해주세요.");
+      throw new Error("분석할 게시물이 없습니다. Step 3에서 게시물을 추가한 후 분석해주세요.");
     }
+
+    console.log(`게시물 ${posts.length}개 로드 완료`);
 
     // ════════════════════════════════════════
     // STAGE 1: classify (Haiku — 빠르고 저렴)
@@ -166,13 +204,15 @@ Deno.serve(async (req: Request) => {
         const results: Array<{ primary_category?: string; secondary_category?: string; confidence?: number; tags?: string[] }> = jsonMatch ? JSON.parse(jsonMatch[0]) : [];
         for (let j = 0; j < batch.length; j++) {
           const r = results[j] || {};
-          await adminClient.from("post_classifications").upsert({
-            post_id: batch[j].id,
-            primary_category: r.primary_category || "listing",
-            secondary_category: r.secondary_category || null,
-            confidence: r.confidence || 0.5,
-            tags: r.tags || [],
-          }).catch(() => {});
+          try {
+            await adminClient.from("post_classifications").upsert({
+              post_id: batch[j].id,
+              primary_category: r.primary_category || "listing",
+              secondary_category: r.secondary_category || null,
+              confidence: r.confidence || 0.5,
+              tags: r.tags || [],
+            });
+          } catch { /* 분류 저장 실패는 무시 */ }
         }
       } catch (e) {
         console.error("classify 배치 실패:", e);
@@ -242,13 +282,12 @@ Deno.serve(async (req: Request) => {
       .eq("within_scope", true)
       .in("tier", ["viral"]);
 
-    for (const vp of (viralPosts || []).slice(0, 5)) { // 최대 5건
+    for (const vp of (viralPosts || []).slice(0, 5)) {
       try {
         const captionText = vp.caption || "(캡션 없음)";
         const commentsList = Array.isArray(vp.top_comments) ? vp.top_comments as Array<{ author: string; text: string }> : [];
         const commentsText = commentsList.slice(0, 20).map((c, i) => `[${i}] @${c.author}: ${c.text}`).join("\n");
 
-        // 비전 content 타입 올바르게 선언
         const userContent: Array<{ type: string; [key: string]: unknown }> = [
           {
             type: "text",
@@ -256,7 +295,6 @@ Deno.serve(async (req: Request) => {
           },
         ];
 
-        // 스크린샷 있으면 이미지 앞에 추가
         if (vp.screenshot_paths?.length > 0) {
           try {
             const { data: signedData } = await adminClient.storage
@@ -265,13 +303,18 @@ Deno.serve(async (req: Request) => {
             if (signedData?.signedUrl) {
               const imgResp = await fetch(signedData.signedUrl);
               const imgBuf = await imgResp.arrayBuffer();
-              const imgB64 = btoa(String.fromCharCode(...new Uint8Array(imgBuf)));
+              const uint8 = new Uint8Array(imgBuf);
+              let bin = "";
+              for (let i = 0; i < uint8.length; i += 8192) {
+                bin += String.fromCharCode(...uint8.subarray(i, i + 8192));
+              }
+              const rawCT = imgResp.headers.get("content-type") || "image/jpeg";
               userContent.unshift({
                 type: "image",
                 source: {
                   type: "base64",
-                  media_type: imgResp.headers.get("content-type") || "image/jpeg",
-                  data: imgB64,
+                  media_type: rawCT.split(";")[0].trim(),
+                  data: btoa(bin),
                 },
               });
             }
@@ -288,23 +331,25 @@ Deno.serve(async (req: Request) => {
         await logLlm("autopsy", "claude-opus-4-6", aUsage.input_tokens, aUsage.output_tokens, cost);
 
         const aJson = JSON.parse((aText.match(/\{[\s\S]*\}/) || ["{}"])[0]) as Record<string, unknown>;
-        await adminClient.from("viral_autopsies").upsert({
-          post_id: vp.id,
-          first_3sec_breakdown: aJson.first_3sec_breakdown ?? null,
-          hook_anatomy: aJson.hook_anatomy ?? null,
-          emotion_curve: aJson.emotion_curve ?? null,
-          info_density: aJson.info_density ?? null,
-          topicality_anchor: aJson.topicality_anchor ?? null,
-          comment_reaction_pattern: aJson.comment_reaction_pattern ?? null,
-          algorithm_signals: aJson.algorithm_signals ?? null,
-          scarcity_exclusivity: aJson.scarcity_exclusivity ?? null,
-          visual_impact_score: (aJson.visual_impact_score as Record<string, number>)?.score ?? null,
-          replicability: aJson.replicability ?? null,
-          why_viral_replicable: (aJson.why_viral_replicable as string[]) ?? [],
-          why_viral_situational: (aJson.why_viral_situational as string[]) ?? [],
-          application_warnings: (aJson.application_warnings as string[]) ?? [],
-          total_cost_usd: cost,
-        }).catch((e) => console.error("viral_autopsies upsert 실패:", e));
+        try {
+          await adminClient.from("viral_autopsies").upsert({
+            post_id: vp.id,
+            first_3sec_breakdown: aJson.first_3sec_breakdown ?? null,
+            hook_anatomy: aJson.hook_anatomy ?? null,
+            emotion_curve: aJson.emotion_curve ?? null,
+            info_density: aJson.info_density ?? null,
+            topicality_anchor: aJson.topicality_anchor ?? null,
+            comment_reaction_pattern: aJson.comment_reaction_pattern ?? null,
+            algorithm_signals: aJson.algorithm_signals ?? null,
+            scarcity_exclusivity: aJson.scarcity_exclusivity ?? null,
+            visual_impact_score: (aJson.visual_impact_score as Record<string, number>)?.score ?? null,
+            replicability: aJson.replicability ?? null,
+            why_viral_replicable: (aJson.why_viral_replicable as string[]) ?? [],
+            why_viral_situational: (aJson.why_viral_situational as string[]) ?? [],
+            application_warnings: (aJson.application_warnings as string[]) ?? [],
+            total_cost_usd: cost,
+          });
+        } catch (e) { console.error("viral_autopsies upsert 실패:", e); }
       } catch (e) {
         console.error(`Viral 부검 실패 post_id=${vp.id}:`, e);
       }
@@ -428,16 +473,18 @@ Deno.serve(async (req: Request) => {
         await logLlm("voice", "claude-sonnet-4-6", vUsage.input_tokens, vUsage.output_tokens, cost);
 
         const vJson = JSON.parse((vText.match(/\{[\s\S]*\}/) || ["{}"])[0]) as Record<string, unknown>;
-        await adminClient.from("voice_profiles").upsert({
-          source_account_id: account_id,
-          ending_ratio: vJson.ending_ratio || {},
-          vocabulary_high_freq: (vJson.vocabulary_high_freq as string[]) || [],
-          vocabulary_banned: (vJson.vocabulary_banned_inferred as string[]) || [],
-          signature_phrases_blacklist: (vJson.signature_phrases_blacklist as string[]) || [],
-          emoji_usage: vJson.emoji_usage || {},
-          honorific_distance: (vJson.honorific_distance as string) || "neutral_formal",
-          structural_signatures: (vJson.structural_signatures as string[]) || [],
-        }).catch((e) => console.error("voice_profiles upsert 실패:", e));
+        try {
+          await adminClient.from("voice_profiles").upsert({
+            source_account_id: account_id,
+            ending_ratio: vJson.ending_ratio || {},
+            vocabulary_high_freq: (vJson.vocabulary_high_freq as string[]) || [],
+            vocabulary_banned: (vJson.vocabulary_banned_inferred as string[]) || [],
+            signature_phrases_blacklist: (vJson.signature_phrases_blacklist as string[]) || [],
+            emoji_usage: vJson.emoji_usage || {},
+            honorific_distance: (vJson.honorific_distance as string) || "neutral_formal",
+            structural_signatures: (vJson.structural_signatures as string[]) || [],
+          });
+        } catch (e) { console.error("voice_profiles upsert 실패:", e); }
       } catch (e) {
         console.error("톤 프로파일 실패:", e);
       }
@@ -492,21 +539,40 @@ Deno.serve(async (req: Request) => {
     );
 
   } catch (err) {
-    console.error("analyze-account 오류:", err);
-    const errMsg = err instanceof Error ? err.message : "알 수 없는 오류";
+    // ── 모든 예외 최종 처리 ──
+    console.error("analyze-account 치명 오류:", err);
+    const errMsg = err instanceof Error ? err.message : String(err);
 
-    await adminClient.from("analyses").update({
-      status: "failed",
-      error_log: errMsg,
-    }).eq("id", analysisId).catch(() => {});
+    if (analysisId) {
+      try {
+        await adminClient.from("analyses").update({
+          status: "failed",
+          error_log: errMsg,
+        }).eq("id", analysisId);
+      } catch { /* DB 업데이트 실패는 무시 */ }
+    }
 
-    try {
-      await adminClient.channel(broadcastChannel).send({
-        type: "broadcast",
-        event: "error",
-        payload: { message: errMsg },
-      });
-    } catch { /* 무시 */ }
+    if (broadcastChannel) {
+      try {
+        const supabaseUrl2 = Deno.env.get("SUPABASE_URL")!;
+        const serviceRoleKey2 = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        await fetch(`${supabaseUrl2}/realtime/v1/api/broadcast`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${serviceRoleKey2}`,
+            "apikey": serviceRoleKey2,
+          },
+          body: JSON.stringify({
+            messages: [{
+              topic: broadcastChannel,
+              event: "error",
+              payload: { message: errMsg },
+            }],
+          }),
+        });
+      } catch { /* 무시 */ }
+    }
 
     return new Response(
       JSON.stringify({ error: errMsg }),
@@ -524,18 +590,21 @@ async function upsertPerf(
   signals: string[],
   tier: string
 ) {
-  await adminClient.from("post_performance").upsert({
-    post_id: postId,
-    engagement_rate: engRate,
-    engagement_multiple: avgEng > 0 ? engRate / avgEng : null,
-    is_top_performer: tier !== "standard",
-    save_signals: signals.filter((s) => s.includes("save")).length,
-    share_signals: signals.filter((s) => s.includes("share")).length,
-    comment_depth_score: 0,
-  }).catch(() => {});
+  try {
+    await adminClient.from("post_performance").upsert({
+      post_id: postId,
+      engagement_rate: engRate,
+      engagement_multiple: avgEng > 0 ? engRate / avgEng : null,
+      is_top_performer: tier !== "standard",
+      save_signals: signals.filter((s) => s.includes("save")).length,
+      share_signals: signals.filter((s) => s.includes("share")).length,
+      comment_depth_score: 0,
+    });
+  } catch { /* 무시 */ }
 
-  await adminClient.from("benchmark_posts")
-    .update({ tier, tier_signals: signals })
-    .eq("id", postId)
-    .catch(() => {});
+  try {
+    await adminClient.from("benchmark_posts")
+      .update({ tier, tier_signals: signals })
+      .eq("id", postId);
+  } catch { /* 무시 */ }
 }

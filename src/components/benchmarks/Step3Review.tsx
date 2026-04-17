@@ -122,7 +122,7 @@ export function Step3Review({
         AI가 스크린샷에서 추출한 내용입니다. 확인 후 틀린 부분을 수정하세요.
       </p>
       <div className="rounded-xl bg-amber-50/50 border border-amber-200/40 p-3 mb-5 text-xs text-amber-700/80 space-y-1">
-        <p><strong>바이럴</strong> 체크박스: 이 계정의 다른 게시물보다 좋아요·댓글이 월등히 많은 "대박 게시물"에 체크하세요. AI가 집중 해부하여 재현 공식을 만듭니다.</p>
+        <p><strong>바이럴</strong> 체크박스: 이 계정의 다른 게시물보다 좋아요·댓글이 월등히 많은 &ldquo;대박 게시물&rdquo;에 체크하세요. AI가 집중 해부하여 재현 공식을 만듭니다.</p>
         <p>게시물이 없으면 아래 <strong>&ldquo;게시물 추가&rdquo;</strong>를 눌러 직접 입력할 수 있습니다.</p>
       </div>
 

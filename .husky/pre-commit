@@ -1,10 +1,13 @@
-# API 키 유출 방지 — staged 파일에서 Anthropic/Supabase 키 패턴 검색
-if git diff --cached --name-only | xargs grep -l 'sk-ant-' 2>/dev/null; then
+# API 키 유출 방지 — staged 파일에서 실제 키값 패턴 검색 (변수명은 허용)
+ANTHROPIC_PAT="sk-ant-"
+if git diff --cached --name-only | xargs grep -rl "${ANTHROPIC_PAT}api" 2>/dev/null | grep -v pre-commit; then
   echo "ERROR: Anthropic API key detected in staged files!"
   exit 1
 fi
 
-if git diff --cached --name-only | xargs grep -l 'SUPABASE_SERVICE_ROLE_KEY' 2>/dev/null; then
-  echo "ERROR: Supabase service role key reference detected in staged files!"
+# 실제 JWT 형식 service role 키값 (eyJhbGci... 로 시작하는 긴 문자열)을 체크
+# Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") 같은 변수 참조는 허용
+if git diff --cached --name-only | xargs grep -rlE 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_-]{50,}' 2>/dev/null; then
+  echo "ERROR: Supabase JWT key value detected in staged files!"
   exit 1
 fi

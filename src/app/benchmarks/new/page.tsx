@@ -283,6 +283,12 @@ export default function NewBenchmarkPage() {
               onChange={setAccountData}
               onNext={handleStep1Next}
               onBack={() => router.push("/benchmarks")}
+              onAutoScrape={(autoAccountId, postsCount) => {
+                // 자동 수집 완료 → accountId 설정 후 Step 4로 바로 이동
+                setAccountId(autoAccountId);
+                console.log(`자동 수집 완료: account=${autoAccountId}, posts=${postsCount}`);
+                setCurrentStep(4);
+              }}
             />
           )}
 
@@ -319,7 +325,7 @@ export default function NewBenchmarkPage() {
               trackingCadence={trackingCadence}
               onCadenceChange={setTrackingCadence}
               onNext={handleStartAnalysis}
-              onBack={() => setCurrentStep(3)}
+              onBack={() => setCurrentStep(extractedPosts.length > 0 ? 3 : 1)}
             />
           )}
 
