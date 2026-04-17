@@ -6,6 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+interface SlideGuide {
+  slide: number;
+  text: string;       // 슬라이드 대형 텍스트
+  visual: string;     // 어떤 사진/이미지 사용할지
+}
+
 interface WeeklySuggestion {
   day: string;
   format: string;
@@ -13,6 +19,11 @@ interface WeeklySuggestion {
   caption: string;
   hashtags: string[];
   basis: string;
+  // 비주얼 가이드
+  thumbnail_text: string;         // 표지(1장) 대형 텍스트
+  thumbnail_photo: string;        // 표지 사진 촬영/선택 가이드
+  color_tone: string;             // 색감/분위기 (예: 밝고 따뜻한, 깔끔한 화이트)
+  slides: SlideGuide[];           // 슬라이드별 구성 (carousel이면 전체, photo면 1장)
 }
 
 async function tavilySearch(query: string): Promise<string> {
@@ -47,16 +58,27 @@ async function sendDiscord(webhookUrl: string, suggestions: WeeklySuggestion[]):
   };
 
   const lines = suggestions
-    .map((s, i) =>
-      [
+    .map((s, i) => {
+      const slideLines = (s.slides ?? [])
+        .map((sl) => `  ${sl.slide}장: **"${sl.text}"** — ${sl.visual}`)
+        .join("\n");
+
+      return [
         `**[${i + 1}] ${s.day}요일 · ${FORMAT_LABEL[s.format] ?? s.format}**`,
         `📌 ${s.topic}`,
         "",
-        s.caption.slice(0, 350) + (s.caption.length > 350 ? "…" : ""),
+        `🖼️ **표지 문구:** ${s.thumbnail_text}`,
+        `📷 **표지 사진:** ${s.thumbnail_photo}`,
+        `🎨 **색감:** ${s.color_tone}`,
+        "",
+        slideLines ? `**슬라이드 구성:**\n${slideLines}` : "",
+        "",
+        "**캡션:**",
+        s.caption.slice(0, 300) + (s.caption.length > 300 ? "…" : ""),
         "",
         `📊 *근거: ${s.basis}*`,
-      ].join("\n")
-    )
+      ].filter(Boolean).join("\n");
+    })
     .join("\n\n──────────────\n\n");
 
   await fetch(webhookUrl, {
@@ -79,7 +101,7 @@ Deno.serve(async (req: Request) => {
 
     if (!user_id) {
       return new Response(JSON.stringify({ error: "user_id 필요" }), {
-        status: 400,
+        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -89,7 +111,7 @@ Deno.serve(async (req: Request) => {
     // ── 1. 사용자의 Playbook 로드 ──────────────────────
     const { data: playbooks } = await adminClient
       .from("playbooks")
-      .select("id, code, name, copy_formula, best_format, hashtag_set, source_account_id, avg_engagement_rate")
+      .select("id, code, name, copy, format, hashtags, source_account_id, avg_engagement_rate, category")
       .eq("user_id", user_id)
       .order("avg_engagement_rate", { ascending: false })
       .limit(10);
@@ -99,7 +121,7 @@ Deno.serve(async (req: Request) => {
         JSON.stringify({
           error: "분석된 Playbook이 없습니다. 먼저 벤치마크 계정을 1개 이상 분석해주세요.",
         }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -140,11 +162,15 @@ Deno.serve(async (req: Request) => {
         const engagement = pb.avg_engagement_rate
           ? `참여율 ${(Number(pb.avg_engagement_rate) * 100).toFixed(1)}%`
           : "";
+        const copyObj = pb.copy as Record<string, string> | null;
+        const formatObj = pb.format as Record<string, unknown> | null;
+        const hashObj = pb.hashtags as { primary?: string[]; secondary?: string[] } | null;
+        const tags = [...(hashObj?.primary ?? []), ...(hashObj?.secondary ?? [])].slice(0, 5);
         return [
           `[${pb.code}] ${pb.name} (출처: ${handle}, ${engagement})`,
-          `공식: ${pb.copy_formula ?? "없음"}`,
-          `추천 포맷: ${pb.best_format ?? "사진"}`,
-          `해시태그: ${((pb.hashtag_set as string[]) ?? []).slice(0, 5).join(" ")}`,
+          `훅: ${copyObj?.hook ?? "없음"} / CTA: ${copyObj?.cta ?? "없음"} / 톤: ${copyObj?.tone ?? "없음"}`,
+          `추천 포맷: ${formatObj?.type ?? "사진"} ${formatObj?.slide_count ? `(${formatObj.slide_count}장)` : ""}`,
+          `해시태그: ${tags.join(" ")}`,
         ].join("\n");
       })
       .join("\n\n");
@@ -171,17 +197,25 @@ ${playbookSummary}
 ${newsText}
 
 위 Playbook 공식과 뉴스를 반드시 결합해서, 이번 주 월·수·금에 올릴 게시물 3개를 JSON으로 제안하세요.
-각 제안은 실제로 올릴 수 있는 완성 캡션이어야 합니다.
+캡션뿐 아니라 사진 구성과 슬라이드별 텍스트까지 완전한 제작 가이드를 제공하세요.
 
 {
   "suggestions": [
     {
       "day": "월",
       "format": "carousel",
-      "topic": "독자 관점에서 궁금할 주제 (1줄 제목)",
-      "caption": "즉시 복사해서 인스타에 올릴 수 있는 완성된 캡션. 이모지 포함. 줄바꿈 포함. 300~500자. 실제 도봉구 내용 포함.",
+      "topic": "독자 관점 주제 (1줄 제목)",
+      "caption": "즉시 복사해서 인스타에 올릴 수 있는 완성된 캡션. 이모지 포함. 줄바꿈 포함. 300~500자.",
       "hashtags": ["#도봉구부동산", "#공인중개사", "#오늘부동산", ...최소8개],
-      "basis": "어떤 Playbook 공식을 왜 적용했는지 + 뉴스와 어떻게 연결되는지 + 예상 효과 (2~3줄, 구체적인 수치 포함)"
+      "basis": "어떤 Playbook 공식을 왜 적용했는지 + 뉴스 연결 + 예상 효과 (2~3줄)",
+      "thumbnail_text": "표지(1번 슬라이드)에 크게 들어갈 텍스트. 3~10자 이내. 눈길 끄는 문구.",
+      "thumbnail_photo": "표지 사진 가이드. 구체적으로 어떤 장소·각도·시간대에 찍어야 하는지. 없으면 어떤 이미지를 구해야 하는지.",
+      "color_tone": "전체 색감과 분위기 (예: '밝은 화이트+민트 포인트, 깔끔한 정보형', '따뜻한 베이지+브라운, 집 내부 느낌')",
+      "slides": [
+        { "slide": 1, "text": "표지 대형 텍스트", "visual": "사진 또는 배경 설명" },
+        { "slide": 2, "text": "이 슬라이드에 들어갈 핵심 문구", "visual": "사진/그래픽 설명" },
+        ...슬라이드 수만큼
+      ]
     },
     { "day": "수", ... },
     { "day": "금", ... }
@@ -239,7 +273,7 @@ ${newsText}
     console.error("generate-weekly-brief 오류:", err);
     return new Response(
       JSON.stringify({ error: (err as Error).message }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
