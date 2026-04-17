@@ -42,6 +42,7 @@ export function Step1AccountInfo({ data, onChange, onNext, onBack, onAutoScrape 
   const [scraping, setScraping] = useState(false);
   const [scrapeStatus, setScrapeStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [scrapeMsg, setScrapeMsg] = useState("");
+  const [showScrapeConfirm, setShowScrapeConfirm] = useState(false);
 
   const update = (field: keyof AccountData, value: string | number | boolean | null) => {
     onChange({ ...data, [field]: value });
@@ -167,6 +168,40 @@ export function Step1AccountInfo({ data, onChange, onNext, onBack, onAutoScrape 
   };
 
   return (
+    <>
+    {/* 스크래핑 비용 확인 모달 */}
+    {showScrapeConfirm && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+        <div className="bg-white rounded-2xl shadow-xl p-6 max-w-sm w-full">
+          <h3 className="font-semibold text-charcoal mb-3">수집 전 비용 확인</h3>
+          <p className="text-sm text-charcoal-light mb-1">
+            <strong className="text-charcoal">@{autoHandle.replace(/^@/, "")}</strong> 계정을 수집합니다.
+          </p>
+          <div className="rounded-xl bg-amber-50 border border-amber-200/50 px-4 py-3 my-3 text-sm text-amber-700">
+            <p className="font-medium mb-1">Apify API 비용 발생</p>
+            <p className="text-xs">프로필 + 최근 3주 게시물 수집 시 약 <strong>$0.20~0.50</strong></p>
+            <p className="text-xs mt-1 opacity-70">계정 크기·게시물 수에 따라 달라질 수 있습니다</p>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              onClick={() => setShowScrapeConfirm(false)}
+              className="flex-1 py-2.5 rounded-xl border border-border-soft text-charcoal-light text-sm hover:bg-gray-50 transition-colors"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => { setShowScrapeConfirm(false); handleAutoScrape(); }}
+              className="flex-1 py-2.5 rounded-xl bg-sage text-white text-sm font-medium hover:bg-sage-dark transition-colors"
+            >
+              확인 · 수집 시작
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     <GlassCard padding="lg">
       <h2 className="text-lg font-semibold text-charcoal mb-6">Step 1. 계정 정보</h2>
 
@@ -181,14 +216,14 @@ export function Step1AccountInfo({ data, onChange, onNext, onBack, onAutoScrape 
             type="text"
             value={autoHandle}
             onChange={(e) => setAutoHandle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleAutoScrape()}
+            onKeyDown={(e) => e.key === "Enter" && !scraping && autoHandle.trim() && setShowScrapeConfirm(true)}
             placeholder="grace_zip_"
             disabled={scraping}
             className="flex-1 px-4 py-2.5 rounded-xl border border-border-soft bg-white/80 text-charcoal placeholder:text-charcoal-light/40 focus:outline-none focus:ring-2 focus:ring-sage/30 focus:border-sage text-sm disabled:opacity-50"
           />
           <button
             type="button"
-            onClick={handleAutoScrape}
+            onClick={() => setShowScrapeConfirm(true)}
             disabled={scraping || !autoHandle.trim()}
             className="px-4 py-2.5 rounded-xl bg-sage text-white text-sm font-medium hover:bg-sage-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
@@ -360,5 +395,6 @@ export function Step1AccountInfo({ data, onChange, onNext, onBack, onAutoScrape 
         </button>
       </div>
     </GlassCard>
+    </>
   );
 }
